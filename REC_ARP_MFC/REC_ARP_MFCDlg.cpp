@@ -23,9 +23,10 @@ pcap_if_t* Dev, * allDevs;
 pcap_t* currentOpenDev;
 CString str;
 PIP_ADAPTER_INFO pAdapter = 0;
-PIP_ADAPTER_INFO currentSelectedAdapter = 0;
+PIP_ADAPTER_INFO pAdapterInf = 0;
+PIP_ADAPTER_INFO SelectedAdapter = 0;
 ULONG uBuf = 0;
-DWORD dwRet;
+DWORD opinf;
 
 // 用于应用程序“关于”菜单项的 CAboutDlg 对话框
 
@@ -121,17 +122,25 @@ BOOL CRECARPMFCDlg::OnInitDialog()
 	SetIcon(m_hIcon, FALSE);		// 设置小图标
 
 	// TODO: 在此添加额外的初始化代码
-	dwRet = GetAdaptersInfo(pAdapter, &uBuf);
-	if (dwRet == ERROR_BUFFER_OVERFLOW)
+	opinf = GetAdaptersInfo(pAdapter, &uBuf);
+	if (opinf == ERROR_BUFFER_OVERFLOW)
 	{
-		pAdapter = (PIP_ADAPTER_INFO)GlobalAlloc(GPTR, uBuf);
-		dwRet = GetAdaptersInfo(pAdapter, &uBuf);
-		if (dwRet == ERROR_SUCCESS) {
-			DEC_COM.AddString(pAdapter->Description);
-			DEC_COM.AddString(pAdapter->Next->Description);
+		pAdapter = (PIP_ADAPTER_INFO)GlobalAlloc(GPTR, uBuf);//获取本地所有适配器并赋值
+		pAdapterInf = pAdapter;	//将适配器信息赋值，防止接下来出现错误
+		opinf = GetAdaptersInfo(pAdapter, &uBuf);	//获取本地网络信息，并赋值返回值
+		if (opinf == ERROR_SUCCESS)
+		{
+			while (pAdapterInf)//当适配器信息不空
+			{
+				DEC_COM.AddString(pAdapterInf->Description);	//添加适配器信息至ComboBox中
+				pAdapterInf = pAdapterInf->Next;	//继续下一个适配器
+			}
 		}
 	}
 	m_Thread = NULL;
+
+	//默认将停止按钮设置为FALSE防止误触
+	END.EnableWindow(FALSE);
 
 	return TRUE;  // 除非将焦点设置到控件，否则返回 TRUE
 }
@@ -203,15 +212,19 @@ HCURSOR CRECARPMFCDlg::OnQueryDragIcon()
 DWORD WINAPI RecInf(LPVOID lpParameter)
 {
 	CRECARPMFCDlg* crlg = (CRECARPMFCDlg*)lpParameter;
+
 	char errBuf[PCAP_ERRBUF_SIZE]; //存放错误信息的缓冲
 	pcap_findalldevs(&allDevs, errBuf);//列举所有设备 
 
-	CString a = currentSelectedAdapter->AdapterName;
+	CString a = SelectedAdapter->AdapterName;
+
 	CString subfromIpHelper = a.Mid(a.ReverseFind('{') + 1, 4);
-	for (Dev = allDevs; Dev; Dev = Dev->next) {
+	for (Dev = allDevs; Dev; Dev = Dev->next)
+	{
 		a = Dev->name;
 		CString subfromWinpcap = a.Mid(a.ReverseFind('{') + 1, 4);
-		if (subfromWinpcap == subfromIpHelper) {
+		if (subfromWinpcap == subfromIpHelper)
+		{
 			break;
 		}
 	}
@@ -225,24 +238,38 @@ DWORD WINAPI RecInf(LPVOID lpParameter)
 
 	while (true)
 	{
+		//使用pcap_next_ex捕获数据报
 		pcap_next_ex(currentOpenDev, &hdr, &pkt_data);
-		unsigned char* data = NULL;
-		data = (unsigned char*)pkt_data;
-		unsigned char GetFrame[60];
 
-		for (int i=0; i < 60; i++) {
+		unsigned char* data = NULL;	//定义获取的数据包
+
+		data = (unsigned char*)pkt_data;	//将捕获的数据包赋值
+
+		unsigned char GetFrame[60];		//用于转换格式
+
+		for (int i=0; i < 60; i++) //将data转换为char[60] 方便获取数据
+		{
 			GetFrame[i] = *data;
 			*data = *data + 1;
 		}
+
+		//限定格式，使捕获的数据包为指定的数据包
 		if (data[12] == 0x08 && data[13] == 0x06 && data[20] == 0x00 && data[21] == 0x02)
 		{
+			//将发送IP写入字符串中
 			str.Format("%d.%d.%d.%d", data[28], data[29], data[30], data[31]);
 			in_addr ipAddress;
+
+			//将点分十进制的IP转换成一个长整数型数存入定义的ipAddress中
 			ipAddress.S_un.S_addr = inet_addr(str);
 
+			//定义主机信息结构体
 			hostent* pht = NULL;
+
+			//通过ip地址获取设备信息
 			pht = gethostbyaddr((char*)&ipAddress, sizeof(ipAddress), AF_INET);
 
+			//当主机信息不空时，输出主机名
 			if (pht != NULL)
 			{
 				str.Format("发送ip:%d.%d.%d.%d       发送mac:%02X-%02X-%02X-%02X-%02X-%02X     发送主机名:%15s",
@@ -251,40 +278,55 @@ DWORD WINAPI RecInf(LPVOID lpParameter)
 					, pht->h_name
 				);
 			}
+			//无法获取主机信息则输出未知主机名
 			else 
 			{
 				str.Format("发送ip:%d.%d.%d.%d       发送mac:%02X-%02X-%02X-%02X-%02X-%02X     发送主机名:%15s",
 					data[28], data[29], data[30], data[31],
 					data[6], data[7], data[8], data[9], data[10], data[11]
-					, "无法获取主机名"
+					, "未知主机名"
 				);
 			}
+
+			//通过AddString方法直接向主线程界面更新数据
 			crlg->INF.AddString(str);
-			//	Cdialog->m_ComboxResults.Invalidate();	//这句是刷新界面，但是不用也可以。true的话就是有刷新的效果，false就没有
+			//crlg->m_ComboxResults.Invalidate();	//这句是刷新界面,True刷新，False则不刷新
 		}
 
 		
 	}
 }
 
+
+//开始按钮的设计
 void CRECARPMFCDlg::OnBnClickedStartBut()
 {
-	currentSelectedAdapter = pAdapter;
+	//将所有设备信息赋值
+	SelectedAdapter = pAdapter;
+
 	CString selectedItem;
+
+	//获取当前ComboBox所选数据
 	DEC_COM.GetLBText(DEC_COM.GetCurSel(), selectedItem);
-	while (currentSelectedAdapter->Description != selectedItem)
+
+	//循环将选择设备赋值
+	while (SelectedAdapter->Description != selectedItem)
 	{
-		currentSelectedAdapter = currentSelectedAdapter->Next;
+		SelectedAdapter = SelectedAdapter->Next;
 	}
+
 	// TODO: 在此添加控件通知处理程序代码
-	if (currentSelectedAdapter == 0)
+	if (SelectedAdapter == 0)
 	{
 		MessageBox("请先于左侧框内选择设备！");
 	}
-	else {
+	else
+	{
+		//将停止按钮恢复，将开始按钮设为FALSE
 		END.EnableWindow(TRUE);
 		START.EnableWindow(FALSE);
 
+		//若线程为空，则开始线程工作
 		if (m_Thread == NULL)
 		{
 			m_Thread = CreateThread(NULL, 0, RecInf, this, 0, NULL);
@@ -299,10 +341,14 @@ void CRECARPMFCDlg::OnBnClickedStartBut()
 }
 
 
+//暂停按钮的设计
 void CRECARPMFCDlg::OnBnClickedEndBut()
 {
+	//将停止按钮设为FALSE，启动按钮恢复工作
 	END.EnableWindow(FALSE);
 	START.EnableWindow(TRUE);
+
+	//暂停线程的工作
 	SuspendThread(m_Thread);
 }
 
