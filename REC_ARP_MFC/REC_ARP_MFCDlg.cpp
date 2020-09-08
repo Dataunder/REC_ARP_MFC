@@ -139,6 +139,8 @@ BOOL CRECARPMFCDlg::OnInitDialog()
 	}
 	m_Thread = NULL;
 
+	INF.SetHorizontalExtent(2000);
+
 	//默认将停止按钮设置为FALSE防止误触
 	END.EnableWindow(FALSE);
 
@@ -247,6 +249,7 @@ DWORD WINAPI RecInf(LPVOID lpParameter)
 
 		unsigned char GetFrame[60];		//用于转换格式
 
+
 		for (int i=0; i < 60; i++) //将data转换为char[60] 方便获取数据
 		{
 			GetFrame[i] = *data;
@@ -272,27 +275,36 @@ DWORD WINAPI RecInf(LPVOID lpParameter)
 			//当主机信息不空时，输出主机名
 			if (pht != NULL)
 			{
-				str.Format("发送ip:%d.%d.%d.%d       发送mac:%02X-%02X-%02X-%02X-%02X-%02X     发送主机名:%15s",
+				str.Format("协议类型：%02x%02x，ETH_IP      帧类型：%02x%02x，ETH_ARP     操作类型：%02x%02x，ARP_RESPONSE     发送方ip:%d.%d.%d.%d     发送方mac:%02X-%02X-%02X-%02X-%02X-%02X        目标mac地址：%02x-%02x-%02x-%02x-%02x-%02x        目标ip地址：%d.%d.%d.%d          发送主机名:%15s",
+					data[16],data[17],
+					data[12],data[13],
+					data[20],data[21],
 					data[28], data[29], data[30], data[31],
-					data[6], data[7], data[8], data[9], data[10], data[11]
-					, pht->h_name
+					data[6], data[7], data[8], data[9], data[10], data[11],
+					data[32], data[33], data[34], data[35], data[36], data[37],
+					data[38], data[39], data[40], data[41],
+					pht->h_name
 				);
 			}
 			//无法获取主机信息则输出未知主机名
 			else 
 			{
-				str.Format("发送ip:%d.%d.%d.%d       发送mac:%02X-%02X-%02X-%02X-%02X-%02X     发送主机名:%15s",
+				str.Format("协议类型：%02x%02x，ETH_IP      帧类型：%02x%02x，ETH_ARP     操作类型：%02x%02x，ARP_RESPONSE     发送方ip:%d.%d.%d.%d       发送方mac:%02X-%02X-%02X-%02X-%02X-%02X        目标mac地址：%02x-%02x-%02x-%02x-%02x-%02x        目标ip地址：%d.%d.%d.%d          发送主机名:%15s",
+					data[16], data[17],
+					data[12], data[13],
+					data[20], data[21],
 					data[28], data[29], data[30], data[31],
-					data[6], data[7], data[8], data[9], data[10], data[11]
-					, "未知主机名"
+					data[6], data[7], data[8], data[9], data[10], data[11],
+					data[32], data[33], data[34], data[35], data[36], data[37],
+					data[38], data[39], data[40], data[41],
+					 "未知主机名"
 				);
 			}
-
 			//通过AddString方法直接向主线程界面更新数据
 			crlg->INF.AddString(str);
-			//crlg->m_ComboxResults.Invalidate();	//这句是刷新界面,True刷新，False则不刷新
+					
 		}
-
+		crlg->INF.Invalidate();	//这句是刷新界面,True刷新，False则不刷新
 		
 	}
 }
