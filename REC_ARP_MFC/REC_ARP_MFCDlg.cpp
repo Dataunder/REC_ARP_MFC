@@ -241,71 +241,72 @@ DWORD WINAPI RecInf(LPVOID lpParameter)
 	while (true)
 	{
 		//使用pcap_next_ex捕获数据报
-		pcap_next_ex(currentOpenDev, &hdr, &pkt_data);
-
-		unsigned char* data = NULL;	//定义获取的数据包
-
-		data = (unsigned char*)pkt_data;	//将捕获的数据包赋值
-
-		unsigned char GetFrame[60];		//用于转换格式
-
-
-		for (int i=0; i < 60; i++) //将data转换为char[60] 方便获取数据
+		if (pcap_next_ex(currentOpenDev, &hdr, &pkt_data) > 0)
 		{
-			GetFrame[i] = *data;
-			*data = *data + 1;
-		}
 
-		//限定格式，使捕获的数据包为指定的数据包
-		if (data[12] == 0x08 && data[13] == 0x06 && data[20] == 0x00 && data[21] == 0x02)
-		{
-			//将发送IP写入字符串中
-			str.Format("%d.%d.%d.%d", data[28], data[29], data[30], data[31]);
-			in_addr ipAddress;
+			unsigned char* data = NULL;	//定义获取的数据包
 
-			//将点分十进制的IP转换成一个长整数型数存入定义的ipAddress中
-			ipAddress.S_un.S_addr = inet_addr(str);
+			data = (unsigned char*)pkt_data;	//将捕获的数据包赋值
 
-			//定义主机信息结构体
-			hostent* pht = NULL;
+			unsigned char GetFrame[60];		//用于转换格式
 
-			//通过ip地址获取设备信息
-			pht = gethostbyaddr((char*)&ipAddress, sizeof(ipAddress), AF_INET);
 
-			//当主机信息不空时，输出主机名
-			if (pht != NULL)
+			for (int i = 0; i < 60; i++) //将data转换为char[60] 方便获取数据
 			{
-				str.Format("协议类型：%02x%02x，ETH_IP      帧类型：%02x%02x，ETH_ARP     操作类型：%02x%02x，ARP_RESPONSE     发送方ip:%d.%d.%d.%d     发送方mac:%02X-%02X-%02X-%02X-%02X-%02X        目标mac地址：%02x-%02x-%02x-%02x-%02x-%02x        目标ip地址：%d.%d.%d.%d          发送主机名:%15s",
-					data[16],data[17],
-					data[12],data[13],
-					data[20],data[21],
-					data[28], data[29], data[30], data[31],
-					data[6], data[7], data[8], data[9], data[10], data[11],
-					data[32], data[33], data[34], data[35], data[36], data[37],
-					data[38], data[39], data[40], data[41],
-					pht->h_name
-				);
+				GetFrame[i] = *data;
+				*data = *data + 1;
 			}
-			//无法获取主机信息则输出未知主机名
-			else 
+
+			//限定格式，使捕获的数据包为指定的数据包
+			if (data[12] == 0x08 && data[13] == 0x06 && data[20] == 0x00 && data[21] == 0x02)
 			{
-				str.Format("协议类型：%02x%02x，ETH_IP      帧类型：%02x%02x，ETH_ARP     操作类型：%02x%02x，ARP_RESPONSE     发送方ip:%d.%d.%d.%d       发送方mac:%02X-%02X-%02X-%02X-%02X-%02X        目标mac地址：%02x-%02x-%02x-%02x-%02x-%02x        目标ip地址：%d.%d.%d.%d          发送主机名:%15s",
-					data[16], data[17],
-					data[12], data[13],
-					data[20], data[21],
-					data[28], data[29], data[30], data[31],
-					data[6], data[7], data[8], data[9], data[10], data[11],
-					data[32], data[33], data[34], data[35], data[36], data[37],
-					data[38], data[39], data[40], data[41],
-					 "未知主机名"
-				);
+				//将发送IP写入字符串中
+				str.Format("%d.%d.%d.%d", data[28], data[29], data[30], data[31]);
+				in_addr ipAddress;
+
+				//将点分十进制的IP转换成一个长整数型数存入定义的ipAddress中
+				ipAddress.S_un.S_addr = inet_addr(str);
+
+				//定义主机信息结构体
+				hostent* pht = NULL;
+
+				//通过ip地址获取设备信息
+				pht = gethostbyaddr((char*)&ipAddress, sizeof(ipAddress), AF_INET);
+
+				//当主机信息不空时，输出主机名
+				if (pht != NULL)
+				{
+					str.Format("协议类型：%02x%02x，ETH_IP      帧类型：%02x%02x，ETH_ARP     操作类型：%02x%02x，ARP_RESPONSE     发送方ip:%d.%d.%d.%d     发送方mac:%02X-%02X-%02X-%02X-%02X-%02X        目标mac地址：%02x-%02x-%02x-%02x-%02x-%02x        目标ip地址：%d.%d.%d.%d          发送主机名:%15s",
+						data[16], data[17],
+						data[12], data[13],
+						data[20], data[21],
+						data[28], data[29], data[30], data[31],
+						data[6], data[7], data[8], data[9], data[10], data[11],
+						data[32], data[33], data[34], data[35], data[36], data[37],
+						data[38], data[39], data[40], data[41],
+						pht->h_name
+					);
+				}
+				//无法获取主机信息则输出未知主机名
+				else
+				{
+					str.Format("协议类型：%02x%02x，ETH_IP      帧类型：%02x%02x，ETH_ARP     操作类型：%02x%02x，ARP_RESPONSE     发送方ip:%d.%d.%d.%d       发送方mac:%02X-%02X-%02X-%02X-%02X-%02X        目标mac地址：%02x-%02x-%02x-%02x-%02x-%02x        目标ip地址：%d.%d.%d.%d          发送主机名:%15s",
+						data[16], data[17],
+						data[12], data[13],
+						data[20], data[21],
+						data[28], data[29], data[30], data[31],
+						data[6], data[7], data[8], data[9], data[10], data[11],
+						data[32], data[33], data[34], data[35], data[36], data[37],
+						data[38], data[39], data[40], data[41],
+						"未知主机名"
+					);
+				}
+				//通过AddString方法直接向主线程界面更新数据
+				crlg->INF.AddString(str);
+
 			}
-			//通过AddString方法直接向主线程界面更新数据
-			crlg->INF.AddString(str);
-					
+			crlg->INF.Invalidate();	//这句是刷新界面,True刷新，False则不刷新
 		}
-		crlg->INF.Invalidate();	//这句是刷新界面,True刷新，False则不刷新
-		
 	}
 }
 
